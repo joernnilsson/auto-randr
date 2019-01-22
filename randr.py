@@ -108,9 +108,13 @@ class Screen(object):
         self.set.resolution = newres
     
     def set_mode(self, mode):
-        self.set_resolution((mode[0], mode[1]))
-        if len(mode) > 2:
-            self.set.freq = mode[2]
+        if type(mode) == tuple:
+            self.set_resolution((mode[0], mode[1]))
+            if len(mode) > 2:
+                self.set.freq = mode[2]
+        else:
+            self.set_resolution((mode.width, mode.height))
+            self.set.freq = mode.freq
 
     def set_as_primary(self,  is_primary):
         """Set this monitor as primary
@@ -157,13 +161,18 @@ class Screen(object):
 
         cmd = ['--output', self.name]
 
-        cmd.append('--auto')
-        cmd.extend(['--mode', '{0}x{1}'.format(self.set.resolution[0], self.set.resolution[1])])
-        cmd.extend(['--pos', "x".join(str(x) for x in self.set.position)])
+        if self.set.is_enabled:
 
-        if self.set.freq:
-            cmd.extend(["--rate", str(self.set.freq)])
+            cmd.append('--auto')
+            cmd.extend(['--mode', '{0}x{1}'.format(self.set.resolution[0], self.set.resolution[1])])
+            cmd.extend(['--pos', "x".join(str(x) for x in self.set.position)])
 
+            if self.set.freq:
+                cmd.extend(["--rate", str(self.set.freq)])
+
+        else:
+            
+            cmd.append('--off')
 
         return cmd
         
