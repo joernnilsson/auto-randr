@@ -35,10 +35,11 @@ SETUPS = [
 def identify(screen):
     mon = UNKNOWN
 
-    if screen.name == eDP_1_1 or screen.name == eDP_1:
+    #if screen.name == eDP_1_1 or screen.name == eDP_1:
+    if screen.manufacturer == "Sharp Corporation":
         mon = BUILTIN
 
-    elif has_mode(screen, 3440, 1440, 49.99):
+    elif screen.manufacturer == "Samsung Electric Company" and has_mode(screen, 3440, 1440, 49.99):
         mon = SAMSUNG_34_WIDE
     
     elif has_mode(screen, 4096, 2160, 24) and has_mode(screen, 1920, 1080, 120):
@@ -47,7 +48,7 @@ def identify(screen):
     elif has_mode(screen, 1920, 1080, 60):
         mon = HD_TV
 
-    print("Detected monitor:", mon)
+    print("Detected monitor:", mon, "("+screen.manufacturer+(" "+screen.model if screen.model else "")+")")
     return mon
 
 
@@ -87,7 +88,7 @@ def main(dry_run, setup_override):
     for s in cs:
         screens[s.name] = s
 
-    #print screens
+    #print(screens)
 
     # Identify monitors
     monitors = {}

@@ -16,6 +16,8 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 import subprocess as sb
+from util import hex2bytes
+from edid import Edid
 
 class Mode(object):
     """docstring for Mode"""
@@ -55,11 +57,13 @@ class ScreenSettings(object):
         self.freq = None
 
 class Screen(object):
-    def __init__(self, name, primary, rot, modes):
+    def __init__(self, name, primary, rot, modes, manufacturer, model):
         super(Screen, self).__init__()
 
         self.name = name
         self.primary = primary
+        self.manufacturer = manufacturer
+        self.model = model
 
         # dirty hack
         self.rotation = None
@@ -266,17 +270,25 @@ def xrandr_apply(screens, dryrun):
     if not dryrun:
         exec_cmd(cmd)
 
-def create_screen(name_str, modes):
-    rot = None
-    sc_name = name_str.split(' ')[0]
+def create_screen(sc_line, modes, edid_data):
+
+    name = sc_line.split(' ')[0]
+    model = ""
+    manufacturer = ""
+    if(len(edid_data) > 0):
+        bytes = hex2bytes("".join(edid_data[0:8]))
+        parsed_edid = Edid(bytes)
+        model = parsed_edid.name if parsed_edid.name else ""
+        manufacturer = parsed_edid.manufacturer
 
     # if connected
+    rot = None
     if modes:
-        fr = name_str.split(' ')
+        fr = sc_line.split(' ')
         if len(fr) > 2:
-            rot = str_to_rot(name_str.split(' ')[3])
+            rot = str_to_rot(sc_line.split(' ')[3])
 
-    return Screen(sc_name, 'primary' in name_str, rot, modes)
+    return Screen(name, 'primary' in sc_line, rot, modes, manufacturer, model)
 
 def parse_xrandr(lines):
     import re
@@ -297,52 +309,57 @@ def parse_xrandr(lines):
 
     screens = []
     modes = []
+    edid_data = []
+
+    parsing_mode = None
 
     for i in lines:
+        #print(i)
         if re.search(rxconn, i) or re.search(rxdisconn, i):
             if sc_name_line:
-                newscreen = create_screen(sc_name_line, modes)
+
+                newscreen = create_screen(sc_name_line, modes, edid_data)
                 screens.append(newscreen)
                 modes = []
+                edid_data = []
 
             sc_name_line = i
 
         else:
             r = re.search(rx, i)
+            parts = i.strip().split(" ")
             if r:
                 width = int(r.group(1))
                 height = int(r.group(2))
 
-                #print r.groups()
+                parsing_mode = [width, height, 0.0]
 
-                for fs in re.finditer(rxfreq, i):
-                    
-                    if fs.group(2) == "x":
-                        continue
-                    #print(i, "::", fs.group(1))
-
-                    freq = float(fs.group(1))
-
-                    newmode = Mode(width, height, freq, False, False)
+            elif parsing_mode:
+                if(parts[0] == "v:"):
+                    #print(parts[-1][0:-2])
+                    parsing_mode[2] = float(parts[-1][0:-2])
+                    newmode = Mode(parsing_mode[0], parsing_mode[1], parsing_mode[2], False, False)
                     modes.append(newmode)
-
-                #freq = float(r.group(3))
-                #current = r.group(4).replace(' ', '') == '*'
-                #preferred = r.group(5).replace(' ', '') == '+'
-                
-
-                #newmode = Mode(width, height, freq, current, preferred)
-                #modes.append(newmode)
+                    parsing_mode = None
+            
+            elif len(parts) == 1 and len(parts[0]) == 32:
+                edid_data.append(parts[0])
 
     if sc_name_line:
-        screens.append(create_screen(sc_name_line, modes))
+        screens.append(create_screen(sc_name_line, modes, edid_data))
 
     return screens
 
 def connected_screens():
     """Get connected screens
     """
-    return [s for s in parse_xrandr(exec_cmd('xrandr')) if s.is_connected()]
+    #return [s for s in parse_xrandr(exec_cmd('xrandr')) if s.is_connected()]
+    return [s for s in parse_xrandr(exec_cmd(['xrandr', '--verbose'])) if s.is_connected()]
 
 def enabled_screens():
     return [s for s in connected_screens() if s.is_enabled()]
+
+if __name__ == "__main__":
+    print(parse_xrandr(exec_cmd('xrandr')))
+    print("--------------------------------------------------------------------------")
+    print(parse_xrandr(exec_cmd(['xrandr', '--verbose'])))
