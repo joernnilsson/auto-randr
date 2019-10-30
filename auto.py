@@ -16,16 +16,18 @@ UNKNOWN = "unknown"
 BUILTIN = "builtin"
 SAMSUNG_34_WIDE = "samsung_34_wide"
 LG_BYTE = "lg_byte"
-HD_TV = "ht_tv"
+HD_TV = "hd_tv"
 
 # Setup
 EXTENAL_ON_RIGHT_ALIGN_BOTTOM = "external_on_right_align_bottom"
+EXTENAL_ON_LEFT_ALIGN_BOTTOM = "external_on_left_align_bottom"
 MIRROR = "mirror"
 BUILTIN_ONLY = "builtin_only"
 EXTERNAL_ONLY = "external_only"
 
 SETUPS = [
 	EXTENAL_ON_RIGHT_ALIGN_BOTTOM,
+	EXTENAL_ON_LEFT_ALIGN_BOTTOM,
 	MIRROR,
 	BUILTIN_ONLY,
 	EXTERNAL_ONLY
@@ -130,6 +132,30 @@ def main(dry_run, setup_override):
             else:
                 s.set_enabled(True)
                 s.set_mode(select_mode(SELECT_HIGHEST_RES, s.modes()))
+                s.set_position((0, 0))
+
+    elif (setup_override == EXTENAL_ON_RIGHT_ALIGN_BOTTOM):
+        print("Using setup:", setup_override)
+        for ident, s in monitors.items():
+            if ident == BUILTIN:
+                s.set_enabled(True)
+                s.set_resolution((1920, 1080))
+                s.set_position((0, 360))
+            else:
+                s.set_enabled(True)
+                s.set_resolution((1920, 1080))
+                s.set_position((1920, 0))
+
+    elif (setup_override == EXTENAL_ON_LEFT_ALIGN_BOTTOM):
+        print("Using setup:", setup_override)
+        for ident, s in monitors.items():
+            if ident == BUILTIN:
+                s.set_enabled(True)
+                s.set_resolution((1920, 1080))
+                s.set_position((1920, 360))
+            else:
+                s.set_enabled(True)
+                s.set_resolution((1920, 1080))
                 s.set_position((0, 0))
 
     elif SAMSUNG_34_WIDE in monitors.keys():
