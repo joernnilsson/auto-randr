@@ -28,13 +28,19 @@ class Mode(object):
         self.freq = freq
         self.current = current
         self.preferred = preferred
+        self.dpi = 100.0
 
     def resolution(self):
         return (self.width, self.height)
 
     def __str__(self):
-        return '{0}x{1}, {2}, curr: {3}, pref: {4}'.format(self.width, \
-                self.height, self.freq, self.current, self.preferred)
+        return "{}\t{:.2f} hz\t{:.1f} dpi\t preferred: {}\tcurrent: {}".format(
+            "{}x{}".format(self.width, self.height).ljust(10), 
+            self.freq, 
+            self.dpi, 
+            self.current, 
+            self.preferred)
+
 
     def cmd_str(self, arg1):
         return '{0}x{1}'.format(self.width, self.height)
@@ -57,13 +63,16 @@ class ScreenSettings(object):
         self.freq = None
 
 class Screen(object):
-    def __init__(self, name, primary, rot, modes, manufacturer, model):
+    def __init__(self, name, primary, rot, modes, manufacturer, model, physical_width, physical_height):
         super(Screen, self).__init__()
 
         self.name = name
         self.primary = primary
         self.manufacturer = manufacturer
         self.model = model
+
+        self.physical_width = physical_width
+        self.physical_height = physical_height
 
         # dirty hack
         self.rotation = None
@@ -275,11 +284,19 @@ def create_screen(sc_line, modes, edid_data):
     name = sc_line.split(' ')[0]
     model = ""
     manufacturer = ""
+    physical_width = 30.0
+    physical_height = 30.0
     if(len(edid_data) > 0):
         bytes = hex2bytes("".join(edid_data[0:8]))
         parsed_edid = Edid(bytes)
         model = parsed_edid.name if parsed_edid.name else ""
         manufacturer = parsed_edid.manufacturer
+        physical_width = parsed_edid.width
+        physical_height = parsed_edid.height
+
+    # Set dpi of modes
+    for mode in modes:
+        mode.dpi = mode.height / (physical_height/2.54)
 
     # if connected
     rot = None
@@ -288,7 +305,7 @@ def create_screen(sc_line, modes, edid_data):
         if len(fr) > 2:
             rot = str_to_rot(sc_line.split(' ')[3])
 
-    return Screen(name, 'primary' in sc_line, rot, modes, manufacturer, model)
+    return Screen(name, 'primary' in sc_line, rot, modes, manufacturer, model, physical_width, physical_height)
 
 def parse_xrandr(lines):
     import re

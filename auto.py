@@ -25,6 +25,21 @@ MIRROR = "mirror"
 BUILTIN_ONLY = "builtin_only"
 EXTERNAL_ONLY = "external_only"
 
+# Density
+DENSITY_HD = "hd"
+DENSITY_4K = "4k"
+
+# Mode selectors
+MODE_SELECT_RATE = 'rate'
+MODE_SELECT_DENSITY = 'density'
+MODE_SELECT_RESOLUTION = 'resolution'
+
+
+DENSITIES = [
+    DENSITY_HD,
+    DENSITY_4K
+]
+
 SETUPS = [
 	EXTENAL_ON_RIGHT_ALIGN_BOTTOM,
 	EXTENAL_ON_LEFT_ALIGN_BOTTOM,
@@ -32,6 +47,9 @@ SETUPS = [
 	BUILTIN_ONLY,
 	EXTERNAL_ONLY
 ]
+
+DENSITY_4K_THRESHOLD = 150.0
+
 
 # Detect the specific displays
 def identify(screen):
@@ -50,13 +68,7 @@ def identify(screen):
     elif has_mode(screen, 1920, 1080, 60):
         mon = HD_TV
 
-    print("Detected monitor:", mon, "("+screen.manufacturer+(" "+screen.model if screen.model else "")+")")
     return mon
-
-
-
-
-
 
 
 def has_mode(screen, w, h, r):
@@ -65,18 +77,49 @@ def has_mode(screen, w, h, r):
             return True
     return False
 
-def select_mode(sort, modes):
+def filter_mode(mode, requirements = {}):
+    for key, val in requirements.items():
+        if key == MODE_SELECT_DENSITY:
+            if val == DENSITY_HD and mode.dpi > DENSITY_4K_THRESHOLD:
+                return False
+            if val == DENSITY_4K and mode.dpi < DENSITY_4K_THRESHOLD:
+                return False
+        elif key == MODE_SELECT_RATE and mode.freq < val:
+            return False
+    return True
+
+def mode_sort_key(mode, order = []):
+    keys = []
+    for o in order:
+        if o == MODE_SELECT_DENSITY:
+            keys.append(mode.dpi)
+        elif o == MODE_SELECT_RATE:
+            keys.append(mode.freq)
+        elif o == MODE_SELECT_RESOLUTION:
+            keys.append(mode.width * mode.height)
+    return tuple(keys)
+
+def select_mode_2(modes, requirements = {}, sort = []):
+    candidates = list(filter(lambda x: filter_mode(x, requirements), modes))
+    a = sorted(candidates, key=lambda x: mode_sort_key(x, sort), reverse=True)
+
+    for m in a:
+        print("\t"+str(m))
+
+    return a[0]
+
+
+def select_mode(sort, modes, denisty = None):
     if(sort == SELECT_HIGHEST_RES):
         a = sorted(modes, key=lambda x: x.width*x.height, reverse=True)
         return a[0]
 
     if sort == SELECT_HIGHEST_RATE:
-        a = sorted(modes, cmp=lambda x: x.freq*1e9 + x.width*x.height, reverse=True)
+        a = sorted(modes, key=lambda x: x.freq*1e9 + x.width*x.height, reverse=True)
         return a[0]
 
 
-
-def main(dry_run, setup_override):
+def main(dry_run, setup_override, preferred_density,print_modes):
     cs = randr.connected_screens()
     if False:
         for s in cs:
@@ -89,8 +132,7 @@ def main(dry_run, setup_override):
     screens = {}
     for s in cs:
         screens[s.name] = s
-
-    #print(screens)
+        
 
     # Identify monitors
     monitors = {}
@@ -99,6 +141,17 @@ def main(dry_run, setup_override):
         if ident in monitors:
             raise("Detected multiple unknown monitors")
         monitors[ident] = s
+
+
+    for m, s in monitors.items():
+        print("Detected monitor:", m, "("+s.manufacturer+(" "+s.model if s.model else "")+")")
+        if print_modes:
+            for m in s.modes():
+                print("\t"+str(m))
+
+        #select_mode_2(s.modes(), {MODE_SELECT_DENSITY: DENSITY_HD}, [MODE_SELECT_RESOLUTION, MODE_SELECT_RATE])
+
+
     # Determine setup
     if (setup_override == MIRROR):
         print("Using setup:", setup_override)
@@ -143,7 +196,7 @@ def main(dry_run, setup_override):
                 s.set_position((0, 360))
             else:
                 s.set_enabled(True)
-                s.set_resolution((1920, 1080))
+                s.set_mode(select_mode(SELECT_HIGHEST_RES, s.modes()))
                 s.set_position((1920, 0))
 
     elif (setup_override == EXTENAL_ON_LEFT_ALIGN_BOTTOM):
@@ -155,7 +208,7 @@ def main(dry_run, setup_override):
                 s.set_position((1920, 360))
             else:
                 s.set_enabled(True)
-                s.set_resolution((1920, 1080))
+                s.set_mode(select_mode(SELECT_HIGHEST_RES, s.modes()))
                 s.set_position((0, 0))
 
     elif SAMSUNG_34_WIDE in monitors.keys():
@@ -238,10 +291,15 @@ if(__name__ == "__main__"):
 
     parser.add_argument("--setup", "-s", help='override setup autoselection, must be one of:\n['+", ".join(SETUPS)+']', default = EXTENAL_ON_RIGHT_ALIGN_BOTTOM, type=str)
     parser.add_argument("--dry-run", "-d", help='dry run, only print xrandr command', action='store_true')
+    parser.add_argument("--density", "-n", help='pereferred density, [hd, 4k]', default = DENSITY_HD, type=str)
+    parser.add_argument("--print-modes", "-p", help="Print available modes", action='store_true')
 
     args = parser.parse_args()
 
     if args.setup is not None and args.setup not in SETUPS:
         parser.error("--setup must be one of: "+", ".join(SETUPS))
 
-    main(args.dry_run, args.setup)
+    if args.density is not None and args.density not in DENSITIES:
+        parser.error("--density must be one of: "+", ".join(DENSITIES))
+
+    main(args.dry_run, args.setup, args.density, args.print_modes)
