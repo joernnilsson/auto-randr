@@ -5,20 +5,11 @@ import math
 import gnome_monitors
 import string
 
-eDP_1 = 'eDP-1'         # builtin display
-eDP_1_1 = 'eDP-1-1'     # builtin display (nvidia)
-DP_1_1_1 = 'DP-1-1-1'   # docking station (HDMI)
-HDMI_1_1 = 'HDMI-1-1'   # external hdmi
 
-SELECT_HIGHEST_RES = 1
-SELECT_HIGHEST_RATE = 2
-
-# Monitors
-UNKNOWN = "unknown"
-BUILTIN = "builtin"
-SAMSUNG_34_WIDE = "samsung_34_wide"
-LG_BYTE = "lg_byte"
-HD_TV = "hd_tv"
+# TODO support multiple external monitors
+# TODO respect dpi settings
+# TODO select fallback if preferred dpi is 4k, but not all screens are 4k
+# TODO better detection of builtin display
 
 # Setup
 EXTENAL_ON_RIGHT_ALIGN_BOTTOM = "external_on_right_align_bottom"
@@ -52,31 +43,9 @@ SETUPS = [
 
 DENSITY_4K_THRESHOLD = 150.0
 
-
-# Detect the specific displays
-def identify(screen):
-    mon = UNKNOWN
-
-    #if screen.name == eDP_1_1 or screen.name == eDP_1:
-    if screen.manufacturer == "Sharp Corporation":
-        mon = BUILTIN
-
-    elif screen.manufacturer == "Samsung Electric Company" and has_mode(screen, 3440, 1440, 49.99):
-        mon = SAMSUNG_34_WIDE
-    
-    elif has_mode(screen, 4096, 2160, 24) and has_mode(screen, 1920, 1080, 120):
-        mon = LG_BYTE
-
-    elif has_mode(screen, 1920, 1080, 60):
-        mon = HD_TV
-
-    return mon
-
-
-def has_mode(screen, w, h, r):
-    for m in screen.supported_modes:
-        if m.width == w and m.height == h and abs(r - m.freq) <= 0.015:
-            return True
+def is_builtin(screen):
+    if screen.name == 'eDP-1':
+        return True
     return False
 
 def filter_mode(mode, requirements = {}):
@@ -105,21 +74,7 @@ def select_mode_2(modes, requirements = {}, sort = []):
     candidates = list(filter(lambda x: filter_mode(x, requirements), modes))
     a = sorted(candidates, key=lambda x: mode_sort_key(x, sort), reverse=True)
 
-    for m in a:
-        print("\t"+str(m))
-
     return a[0]
-
-
-def select_mode(sort, modes, denisty = None):
-    if(sort == SELECT_HIGHEST_RES):
-        a = sorted(modes, key=lambda x: x.width*x.height, reverse=True)
-        return a[0]
-
-    if sort == SELECT_HIGHEST_RATE:
-        a = sorted(modes, key=lambda x: x.freq*1e9 + x.width*x.height, reverse=True)
-        return a[0]
-
 
 def main(dry_run, setup_override, preferred_density,print_modes, gnome_save, gnome_save_file):
     cs = randr.connected_screens()
@@ -128,161 +83,123 @@ def main(dry_run, setup_override, preferred_density,print_modes, gnome_save, gno
             print(s)
             for m in s.supported_modes:
                 print(m)
-                pass
+                pass        
 
-
-    screens = {}
+    # Classify internal/external
+    screen_builtin = None
+    screens_external = []
     for s in cs:
-        screens[s.name] = s
-        
+        if is_builtin(s):
+            screen_builtin = s
+        else:
+            screens_external.append(s)
 
-    # Identify monitors
-    monitors = {}
-    for s in cs:
-        ident = identify(s)
-        if ident in monitors:
-            raise("Detected multiple unknown monitors")
-        monitors[ident] = s
+    # TODO auto select from available setups
+    selected_setup = setup_override if setup_override is not None else EXTENAL_ON_RIGHT_ALIGN_BOTTOM
 
 
-    for m, s in monitors.items():
-        print("Detected monitor:", m, "("+s.manufacturer+(" "+s.model if s.model else "")+")")
-        if print_modes:
-            for m in s.modes():
-                print("\t"+str(m))
+    # Apply setup
+    print("Using setup:", selected_setup)
+    if (selected_setup == MIRROR):
 
-        #select_mode_2(s.modes(), {MODE_SELECT_DENSITY: DENSITY_HD}, [MODE_SELECT_RESOLUTION, MODE_SELECT_RATE])
+        mode_requirements = {MODE_SELECT_DENSITY: preferred_density}
+        mode_sort = [MODE_SELECT_RESOLUTION, MODE_SELECT_RATE]
 
+        builtin_mode = select_mode_2(screen_builtin.modes(), mode_requirements, mode_sort)
 
-    # Determine setup
-    if (setup_override == MIRROR):
-        print("Using setup:", setup_override)
-
-        lowest =  (1920,1080)
-        for s in cs:
-            res = select_mode(SELECT_HIGHEST_RES, s.modes())
+        lowest = (builtin_mode.width, builtin_mode.height)
+        for s in screens_external:
+            res = select_mode_2(s.modes(), mode_requirements, mode_sort)
             if res.width < lowest[0]:
                 lowest = (res.width, res.height)
 
+        # TODO use lowest resolution as mode requirement
         for s in cs:
             s.set_enabled(True)
             s.set_mode(lowest)
             s.set_position((0, 0))
 
-    elif (setup_override == BUILTIN_ONLY):
-        print("Using setup:", setup_override)
-        for ident, s in monitors.items():
-            if ident == BUILTIN:
-                s.set_enabled(True)
-                s.set_resolution((1920, 1080))
-                s.set_position((0, 0))
-            else:
-                s.set_enabled(False)
+    elif (selected_setup == BUILTIN_ONLY):
+        
+        mode_requirements = {MODE_SELECT_DENSITY: preferred_density}
+        mode_sort = [MODE_SELECT_RESOLUTION, MODE_SELECT_RATE]
 
-    elif (setup_override == EXTERNAL_ONLY):
-        print("Using setup:", setup_override)
-        for ident, s in monitors.items():
-            if ident == BUILTIN:
-                s.set_enabled(False)
-            else:
-                s.set_enabled(True)
-                s.set_mode(select_mode(SELECT_HIGHEST_RES, s.modes()))
-                s.set_position((0, 0))
+        builtin_mode = select_mode_2(screen_builtin.modes(), mode_requirements, mode_sort)
 
-    elif (setup_override == EXTENAL_ON_RIGHT_ALIGN_BOTTOM):
-        print("Using setup:", setup_override)
-        for ident, s in monitors.items():
-            if ident == BUILTIN:
-                s.set_enabled(True)
-                s.set_resolution((1920, 1080))
-                s.set_position((0, 360))
-            else:
-                s.set_enabled(True)
-                s.set_mode(select_mode(SELECT_HIGHEST_RES, s.modes()))
-                s.set_position((1920, 0))
+        screen_builtin.set_enabled(True)
+        screen_builtin.set_mode(builtin_mode)
+        screen_builtin.set_position((0, 0))
 
-    elif (setup_override == EXTENAL_ON_LEFT_ALIGN_BOTTOM):
-        print("Using setup:", setup_override)
-        for ident, s in monitors.items():
-            if ident == BUILTIN:
-                s.set_enabled(True)
-                s.set_resolution((1920, 1080))
-                s.set_position((1920, 360))
-            else:
-                s.set_enabled(True)
-                s.set_mode(select_mode(SELECT_HIGHEST_RES, s.modes()))
-                s.set_position((0, 0))
+        for s in screens_external:
+            s.set_enabled(False)
+                
+    elif (selected_setup == EXTERNAL_ONLY):
+        
+        mode_requirements = {MODE_SELECT_DENSITY: preferred_density}
+        mode_sort = [MODE_SELECT_RESOLUTION, MODE_SELECT_RATE]
 
-    elif SAMSUNG_34_WIDE in monitors.keys():
-        print("Using setup:", EXTENAL_ON_RIGHT_ALIGN_BOTTOM)
+        screen_builtin.set_enabled(False)
 
-        monitors[SAMSUNG_34_WIDE].set_enabled(True)
-        monitors[SAMSUNG_34_WIDE].set_mode(select_mode(SELECT_HIGHEST_RES, monitors[SAMSUNG_34_WIDE].modes()))
-        monitors[SAMSUNG_34_WIDE].set_position((1920, 0))
+        # TODO respect dpi settings
+        for s in screens_external:
+            s.set_enabled(True)
+            s.set_mode(select_mode_2(s.modes(), mode_requirements, mode_sort))
+            s.set_position((0, 0))
 
-        monitors[BUILTIN].set_enabled(True)
-        monitors[BUILTIN].set_resolution((1920, 1080))
-        monitors[BUILTIN].set_position((0, 360))
+    elif (selected_setup == EXTENAL_ON_RIGHT_ALIGN_BOTTOM):
 
-    elif LG_BYTE in monitors.keys():
-        print("Using setup:", EXTENAL_ON_RIGHT_ALIGN_BOTTOM)
+        # Determine modes
+        mode_requirements = {MODE_SELECT_DENSITY: preferred_density}
+        mode_sort = [MODE_SELECT_RESOLUTION, MODE_SELECT_RATE]
 
-        monitors[LG_BYTE].set_enabled(True)
-        monitors[LG_BYTE].set_mode((1920, 1080, 60.0))
-        monitors[LG_BYTE].set_position((1920, 0))
+        builtin_mode = select_mode_2(screen_builtin.modes(), mode_requirements, mode_sort)
+        screen_builtin.set_enabled(True)
+        screen_builtin.set_mode(builtin_mode)
+        screen_builtin.set_position((0, 0))
 
-        monitors[BUILTIN].set_enabled(True)
-        monitors[BUILTIN].set_resolution((1920, 1080))
-        monitors[BUILTIN].set_position((0, 360))
+        highest = builtin_mode.height
+        for s in screens_external:
+            s.set_enabled(True)
+            mode = select_mode_2(s.modes(), mode_requirements, mode_sort)
+            s.set_mode(mode)
+            s.set_position((builtin_mode.width, 0))
+            highest = max(highest, mode.height)
 
-    elif HD_TV in monitors.keys():
-        print("Using setup:", EXTENAL_ON_RIGHT_ALIGN_BOTTOM)
+        # Apply vertical positions for bottom alignment
+        for s in cs:
+            current_position = s.set.position
+            new_position = (current_position[0], highest - s.set.resolution[1])
+            s.set_position(new_position)
 
-        monitors[HD_TV].set_enabled(True)
-        monitors[HD_TV].set_mode((1920, 1080, 60.0))
-        monitors[HD_TV].set_position((1920, 0))
 
-        monitors[BUILTIN].set_enabled(True)
-        monitors[BUILTIN].set_resolution((1920, 1080))
-        monitors[BUILTIN].set_position((0, 360))
+    elif (selected_setup == EXTENAL_ON_LEFT_ALIGN_BOTTOM):
 
-    elif eDP_1_1 in screens.keys() and HDMI_1_1 in screens.keys():
+        # Determine modes
+        mode_requirements = {MODE_SELECT_DENSITY: preferred_density}
+        mode_sort = [MODE_SELECT_RESOLUTION, MODE_SELECT_RATE]
 
-        screens[HDMI_1_1].set_enabled(True)
-        screens[HDMI_1_1].set_resolution(screens[HDMI_1_1].available_resolutions()[0])
-        screens[HDMI_1_1].set_position((1920, 0))
+        builtin_mode = select_mode_2(screen_builtin.modes(), mode_requirements, mode_sort)
+        screen_builtin.set_enabled(True)
+        screen_builtin.set_mode(builtin_mode)
 
-        screens[eDP_1_1].set_enabled(True)
-        screens[eDP_1_1].set_resolution((1920, 1080))
-        screens[eDP_1_1].set_position((0, 360))
+        highest = builtin_mode.height
+        widest = 0
+        for s in screens_external:
+            s.set_enabled(True)
+            mode = select_mode_2(s.modes(), mode_requirements, mode_sort)
+            s.set_mode(mode)
+            s.set_position((0, 0))
+            highest = max(highest, mode.height)
+            widest = max(widest, mode.width)
 
-    elif eDP_1_1 in screens.keys() and DP_1_1_1 in screens.keys():
+        screen_builtin.set_position((widest, 0))
 
-        screens[DP_1_1_1].set_enabled(True)
-        screens[DP_1_1_1].set_mode(select_mode(SELECT_HIGHEST_RES, screens[DP_1_1_1].modes()))
-        screens[DP_1_1_1].set_position((1920, 0))
+        # Apply vertical positions for bottom alignment
+        for s in cs:
+            current_position = s.set.position
+            new_position = (current_position[0], highest - s.set.resolution[1])
+            s.set_position(new_position)
 
-        screens[eDP_1_1].set_enabled(True)
-        screens[eDP_1_1].set_resolution((1920, 1080))
-        screens[eDP_1_1].set_position((0, 360))
-
-    elif eDP_1 in screens.keys() and len(screens.keys()) == 1:
-
-        screens[eDP_1].set_enabled(True)
-        screens[eDP_1].set_resolution((1920, 1080))
-        screens[eDP_1].set_position((0, 0))
-
-    elif eDP_1_1 in screens.keys() and len(screens.keys()) == 1:
-
-        screens[eDP_1_1].set_enabled(True)
-        screens[eDP_1_1].set_resolution((1920, 1080))
-        screens[eDP_1_1].set_position((0, 0))
-
-    else:
-        print("Unknown setup")
-        print(screens)
-        sys.exit(1)
-    
     randr.xrandr_apply(cs, dry_run)
 
     if gnome_save and not dry_run:
@@ -298,7 +215,7 @@ if(__name__ == "__main__"):
 
     default_backend_path = string.Template("$HOME/.config/monitors.xml").substitute(os.environ)
 
-    parser.add_argument("--setup", "-s", help='override setup autoselection, must be one of:\n['+", ".join(SETUPS)+']', default = EXTENAL_ON_RIGHT_ALIGN_BOTTOM, type=str)
+    parser.add_argument("--setup", "-s", help='override setup autoselection, must be one of:\n['+", ".join(SETUPS)+']', default = None, type=str)
     parser.add_argument("--dry-run", "-d", help='dry run, only print xrandr command', action='store_true')
     parser.add_argument("--density", "-n", help='pereferred density, [hd, 4k]', default = DENSITY_HD, type=str)
     parser.add_argument("--print-modes", "-p", help="print available modes", action='store_true')

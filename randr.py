@@ -234,10 +234,16 @@ class Screen(object):
         self.set.reset()
 
     def __str__(self):
-        return '{0}, primary: {1}, modes: {2}, conn: {3}, rot: {4}, '\
-                'enabled: {5}'.format(self.name, self.primary, \
-                len(self.supported_modes), self.is_connected(), \
-                rot_to_str(self.rotation), self.is_enabled())
+        return '{}: {} ({} {}) primary: {}, modes: {}, conn: {}, rot: {}, enabled: {}'.format( \
+                    self.name, \
+                    self.manufacturer, \
+                    self.manufacturer_id, \
+                    self.model, \
+                    self.primary, \
+                    len(self.supported_modes), 
+                    self.is_connected(), \
+                    rot_to_str(self.rotation), \
+                    self.is_enabled())
 
     __repr__ = __str__
 
