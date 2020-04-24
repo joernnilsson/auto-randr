@@ -2,6 +2,8 @@ import randr
 import sys
 import os
 import math
+import gnome_monitors
+import string
 
 eDP_1 = 'eDP-1'         # builtin display
 eDP_1_1 = 'eDP-1-1'     # builtin display (nvidia)
@@ -119,7 +121,7 @@ def select_mode(sort, modes, denisty = None):
         return a[0]
 
 
-def main(dry_run, setup_override, preferred_density,print_modes):
+def main(dry_run, setup_override, preferred_density,print_modes, gnome_save, gnome_save_file):
     cs = randr.connected_screens()
     if False:
         for s in cs:
@@ -283,16 +285,25 @@ def main(dry_run, setup_override, preferred_density,print_modes):
     
     randr.xrandr_apply(cs, dry_run)
 
+    if gnome_save and not dry_run:
+        print("Saving to: "+gnome_save_file)
+        gnome_monitors.save(cs, gnome_save_file)
+        
+
 
 if(__name__ == "__main__"):
 
     import argparse
     parser = argparse.ArgumentParser(description='Autoconfigure montitor setup')
 
+    default_backend_path = string.Template("$HOME/.config/monitors.xml").substitute(os.environ)
+
     parser.add_argument("--setup", "-s", help='override setup autoselection, must be one of:\n['+", ".join(SETUPS)+']', default = EXTENAL_ON_RIGHT_ALIGN_BOTTOM, type=str)
     parser.add_argument("--dry-run", "-d", help='dry run, only print xrandr command', action='store_true')
     parser.add_argument("--density", "-n", help='pereferred density, [hd, 4k]', default = DENSITY_HD, type=str)
-    parser.add_argument("--print-modes", "-p", help="Print available modes", action='store_true')
+    parser.add_argument("--print-modes", "-p", help="print available modes", action='store_true')
+    parser.add_argument("--disable-gnome-save", "-g", help="disable saving to gnome xml backend", action='store_true')
+    parser.add_argument("--gnome-save-file", help='gnome xml backend file to use ['+default_backend_path+']', default = default_backend_path, type=str)
 
     args = parser.parse_args()
 
@@ -302,4 +313,4 @@ if(__name__ == "__main__"):
     if args.density is not None and args.density not in DENSITIES:
         parser.error("--density must be one of: "+", ".join(DENSITIES))
 
-    main(args.dry_run, args.setup, args.density, args.print_modes)
+    main(args.dry_run, args.setup, args.density, args.print_modes, not(args.disable_gnome_save), args.gnome_save_file)

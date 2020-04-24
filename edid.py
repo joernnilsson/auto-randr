@@ -91,8 +91,12 @@ class Edid:
             raise ValueError("Invalid header.")
 
         self.raw = bytes
+        self.manufacturer_id = pnpid.id_from_raw(raw_edid.manu_id)
         self.manufacturer = pnpid.manufacturer_from_raw(raw_edid.manu_id)
         self.product = raw_edid.prod_id
+        self.manufacturer_num = raw_edid.manu_id
+        self.serial_no = raw_edid.serial_no
+
         self.year = raw_edid.manu_year + 1990
         self.edid_version = "%d.%d" % (raw_edid.edid_version, raw_edid.edid_revision)
         self.type = "digital" if (raw_edid.input_type & 0xFF) else "analog"

@@ -63,13 +63,16 @@ class ScreenSettings(object):
         self.freq = None
 
 class Screen(object):
-    def __init__(self, name, primary, rot, modes, manufacturer, model, physical_width, physical_height):
+    def __init__(self, name, primary, rot, modes, manufacturer_id, manufacturer, model, physical_width, physical_height, product_id, serial_no):
         super(Screen, self).__init__()
 
         self.name = name
         self.primary = primary
+        self.manufacturer_id = manufacturer_id
         self.manufacturer = manufacturer
         self.model = model
+        self.product_id = product_id
+        self.serial_no = serial_no
 
         self.physical_width = physical_width
         self.physical_height = physical_height
@@ -283,16 +286,22 @@ def create_screen(sc_line, modes, edid_data):
 
     name = sc_line.split(' ')[0]
     model = ""
+    manufacturer_id = ""
     manufacturer = ""
+    product_id = 0
+    serial_no = 0
     physical_width = 30.0
     physical_height = 30.0
     if(len(edid_data) > 0):
         bytes = hex2bytes("".join(edid_data[0:8]))
         parsed_edid = Edid(bytes)
         model = parsed_edid.name if parsed_edid.name else ""
+        manufacturer_id = parsed_edid.manufacturer_id
         manufacturer = parsed_edid.manufacturer
         physical_width = parsed_edid.width
         physical_height = parsed_edid.height
+        product_id = parsed_edid.product
+        serial_no = parsed_edid.serial_no
 
     # Set dpi of modes
     for mode in modes:
@@ -305,7 +314,7 @@ def create_screen(sc_line, modes, edid_data):
         if len(fr) > 2:
             rot = str_to_rot(sc_line.split(' ')[3])
 
-    return Screen(name, 'primary' in sc_line, rot, modes, manufacturer, model, physical_width, physical_height)
+    return Screen(name, 'primary' in sc_line, rot, modes, manufacturer_id, manufacturer, model, physical_width, physical_height, product_id, serial_no)
 
 def parse_xrandr(lines):
     import re
