@@ -4,7 +4,7 @@ usage: auto.py [-h] [--setup SETUP] [--dry-run] [--density DENSITY]
                [--print-modes] [--disable-gnome-save]
                [--gnome-save-file GNOME_SAVE_FILE]
 
-Autoconfigure montitor setup
+Autoconfigure monitor setup
 
 optional arguments:
   -h, --help            show this help message and exit
