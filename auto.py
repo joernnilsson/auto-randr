@@ -294,7 +294,7 @@ def main(dry_run, setup_override, preferred_density,print_modes, gnome_save, gno
 if(__name__ == "__main__"):
 
     import argparse
-    parser = argparse.ArgumentParser(description='Autoconfigure montitor setup')
+    parser = argparse.ArgumentParser(description='Autoconfigure monitor setup')
 
     default_backend_path = string.Template("$HOME/.config/monitors.xml").substitute(os.environ)
 
