@@ -2,7 +2,7 @@
 from lxml import etree as ET
 from collections import namedtuple
 
-def save(input_screens, file="~/.config/monitors.xml"):
+def save(input_screens, file):
 
     # Remove disabled screens
     screens = list(filter(lambda x: x.set.is_enabled, input_screens))
