@@ -78,12 +78,13 @@ def select_mode_2(modes, requirements = {}, sort = []):
 
 def main(dry_run, setup_override, preferred_density,print_modes, gnome_save, gnome_save_file):
     cs = randr.connected_screens()
-    if False:
-        for s in cs:
-            print(s)
-            for m in s.supported_modes:
+
+    # Print info
+    for s in cs:
+        print(s)
+        if print_modes:
+            for m in s.modes():
                 print(m)
-                pass        
 
     # Classify internal/external
     screen_builtin = None
@@ -96,7 +97,6 @@ def main(dry_run, setup_override, preferred_density,print_modes, gnome_save, gno
 
     # TODO auto select from available setups
     selected_setup = setup_override if setup_override is not None else EXTENAL_ON_RIGHT_ALIGN_BOTTOM
-
 
     # Apply setup
     print("Using setup:", selected_setup)
