@@ -4,12 +4,12 @@ import os
 import math
 import gnome_monitors
 import string
+from functools import reduce
 
-
-# TODO support multiple external monitors
-# TODO respect dpi settings
 # TODO select fallback if preferred dpi is 4k, but not all screens are 4k
 # TODO better detection of builtin display
+# TODO align edge as cli argument
+# TODO specify monitor order
 
 # Setup
 EXTENAL_ON_RIGHT_ALIGN_BOTTOM = "external_on_right_align_bottom"
@@ -26,6 +26,10 @@ DENSITY_4K = "4k"
 MODE_SELECT_RATE = 'rate'
 MODE_SELECT_DENSITY = 'density'
 MODE_SELECT_RESOLUTION = 'resolution'
+
+# Align options
+ALIGN_TOP = 'top'
+ALIGN_BOTTOM = 'bottom'
 
 
 DENSITIES = [
@@ -75,6 +79,17 @@ def select_mode_2(modes, requirements = {}, sort = []):
     a = sorted(candidates, key=lambda x: mode_sort_key(x, sort), reverse=True)
 
     return a[0]
+
+def set_positions(screens, align):
+        widest = reduce(lambda y, x : x.set.resolution[0] if (x.set.resolution[0] > y) else y, screens, 0)
+        highest = reduce(lambda y, x : x.set.resolution[1] if (x.set.resolution[1] > y) else y, screens, 0)
+
+        used_width = 0
+        for s in screens:
+            y = 0 if align == ALIGN_TOP else highest - s.set.resolution[1]
+            s.set_position((used_width, y))
+            used_width += s.set.resolution[0]
+
 
 def main(dry_run, setup_override, preferred_density,print_modes, gnome_save, gnome_save_file):
     cs = randr.connected_screens()
@@ -135,70 +150,66 @@ def main(dry_run, setup_override, preferred_density,print_modes, gnome_save, gno
                 
     elif (selected_setup == EXTERNAL_ONLY):
         
-        mode_requirements = {MODE_SELECT_DENSITY: preferred_density}
-        mode_sort = [MODE_SELECT_RESOLUTION, MODE_SELECT_RATE]
+        # Sort screens
+        screens_sorted = []
+        for s in screens_external:
+            screens_sorted.append(s)
 
+        # Disable unused screens
         screen_builtin.set_enabled(False)
 
-        # TODO respect dpi settings
-        for s in screens_external:
+        # Determine modes
+        mode_requirements = {MODE_SELECT_DENSITY: preferred_density}
+        mode_sort = [MODE_SELECT_RESOLUTION, MODE_SELECT_RATE]
+        for s in screens_sorted:
+            mode = select_mode_2(s.modes(), mode_requirements, mode_sort)
             s.set_enabled(True)
-            s.set_mode(select_mode_2(s.modes(), mode_requirements, mode_sort))
-            s.set_position((0, 0))
+            s.set_mode(mode)
+
+        # Set positions
+        set_positions(screens_sorted, ALIGN_BOTTOM)
 
     elif (selected_setup == EXTENAL_ON_RIGHT_ALIGN_BOTTOM):
 
+        # Sort screens
+        screens_sorted = []
+        screens_sorted.append(screen_builtin)
+        for s in screens_external:
+            screens_sorted.append(s)
+
+        # Disable unused screens
+
         # Determine modes
         mode_requirements = {MODE_SELECT_DENSITY: preferred_density}
         mode_sort = [MODE_SELECT_RESOLUTION, MODE_SELECT_RATE]
-
-        builtin_mode = select_mode_2(screen_builtin.modes(), mode_requirements, mode_sort)
-        screen_builtin.set_enabled(True)
-        screen_builtin.set_mode(builtin_mode)
-        screen_builtin.set_position((0, 0))
-
-        highest = builtin_mode.height
-        for s in screens_external:
-            s.set_enabled(True)
+        for s in screens_sorted:
             mode = select_mode_2(s.modes(), mode_requirements, mode_sort)
+            s.set_enabled(True)
             s.set_mode(mode)
-            s.set_position((builtin_mode.width, 0))
-            highest = max(highest, mode.height)
 
-        # Apply vertical positions for bottom alignment
-        for s in cs:
-            current_position = s.set.position
-            new_position = (current_position[0], highest - s.set.resolution[1])
-            s.set_position(new_position)
-
+        # Set positions
+        set_positions(screens_sorted, ALIGN_BOTTOM)
 
     elif (selected_setup == EXTENAL_ON_LEFT_ALIGN_BOTTOM):
 
+        # Sort screens
+        screens_sorted = []
+        for s in screens_external:
+            screens_sorted.append(s)
+        screens_sorted.append(screen_builtin)
+
+        # Disable unused screens
+
         # Determine modes
         mode_requirements = {MODE_SELECT_DENSITY: preferred_density}
         mode_sort = [MODE_SELECT_RESOLUTION, MODE_SELECT_RATE]
-
-        builtin_mode = select_mode_2(screen_builtin.modes(), mode_requirements, mode_sort)
-        screen_builtin.set_enabled(True)
-        screen_builtin.set_mode(builtin_mode)
-
-        highest = builtin_mode.height
-        widest = 0
-        for s in screens_external:
-            s.set_enabled(True)
+        for s in screens_sorted:
             mode = select_mode_2(s.modes(), mode_requirements, mode_sort)
+            s.set_enabled(True)
             s.set_mode(mode)
-            s.set_position((0, 0))
-            highest = max(highest, mode.height)
-            widest = max(widest, mode.width)
 
-        screen_builtin.set_position((widest, 0))
-
-        # Apply vertical positions for bottom alignment
-        for s in cs:
-            current_position = s.set.position
-            new_position = (current_position[0], highest - s.set.resolution[1])
-            s.set_position(new_position)
+        # Set positions
+        set_positions(screens_sorted, ALIGN_BOTTOM)
 
     randr.xrandr_apply(cs, dry_run)
 
