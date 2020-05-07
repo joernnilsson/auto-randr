@@ -12,8 +12,8 @@ from functools import reduce
 # TODO specify monitor order
 
 # Setup
-EXTENAL_ON_RIGHT_ALIGN_BOTTOM = "external_on_right_align_bottom"
-EXTENAL_ON_LEFT_ALIGN_BOTTOM = "external_on_left_align_bottom"
+EXTENAL_ON_RIGHT = "external_on_right"
+EXTENAL_ON_LEFT = "external_on_left"
 MIRROR = "mirror"
 BUILTIN_ONLY = "builtin_only"
 EXTERNAL_ONLY = "external_only"
@@ -38,8 +38,8 @@ DENSITIES = [
 ]
 
 SETUPS = [
-	EXTENAL_ON_RIGHT_ALIGN_BOTTOM,
-	EXTENAL_ON_LEFT_ALIGN_BOTTOM,
+	EXTENAL_ON_RIGHT,
+	EXTENAL_ON_LEFT,
 	MIRROR,
 	BUILTIN_ONLY,
 	EXTERNAL_ONLY
@@ -91,7 +91,7 @@ def set_positions(screens, align):
             used_width += s.set.resolution[0]
 
 
-def main(dry_run, setup_override, preferred_density,print_modes, gnome_save, gnome_save_file):
+def main(dry_run, setup_override, preferred_density,print_modes, gnome_save, gnome_save_file, align):
     cs = randr.connected_screens()
 
     # Print info
@@ -111,7 +111,7 @@ def main(dry_run, setup_override, preferred_density,print_modes, gnome_save, gno
             screens_external.append(s)
 
     # TODO auto select from available setups
-    selected_setup = setup_override if setup_override is not None else EXTENAL_ON_RIGHT_ALIGN_BOTTOM
+    selected_setup = setup_override if setup_override is not None else EXTENAL_ON_RIGHT
 
     # Apply setup
     print("Using setup:", selected_setup)
@@ -167,9 +167,9 @@ def main(dry_run, setup_override, preferred_density,print_modes, gnome_save, gno
             s.set_mode(mode)
 
         # Set positions
-        set_positions(screens_sorted, ALIGN_BOTTOM)
+        set_positions(screens_sorted, align)
 
-    elif (selected_setup == EXTENAL_ON_RIGHT_ALIGN_BOTTOM):
+    elif (selected_setup == EXTENAL_ON_RIGHT):
 
         # Sort screens
         screens_sorted = []
@@ -188,9 +188,9 @@ def main(dry_run, setup_override, preferred_density,print_modes, gnome_save, gno
             s.set_mode(mode)
 
         # Set positions
-        set_positions(screens_sorted, ALIGN_BOTTOM)
+        set_positions(screens_sorted, align)
 
-    elif (selected_setup == EXTENAL_ON_LEFT_ALIGN_BOTTOM):
+    elif (selected_setup == EXTENAL_ON_LEFT):
 
         # Sort screens
         screens_sorted = []
@@ -209,7 +209,7 @@ def main(dry_run, setup_override, preferred_density,print_modes, gnome_save, gno
             s.set_mode(mode)
 
         # Set positions
-        set_positions(screens_sorted, ALIGN_BOTTOM)
+        set_positions(screens_sorted, align)
 
     randr.xrandr_apply(cs, dry_run)
 
@@ -232,6 +232,7 @@ if(__name__ == "__main__"):
     parser.add_argument("--print-modes", "-p", help="print available modes", action='store_true')
     parser.add_argument("--disable-gnome-save", "-g", help="disable saving to gnome xml backend", action='store_true')
     parser.add_argument("--gnome-save-file", help='gnome xml backend file to use ['+default_backend_path+']', default = default_backend_path, type=str)
+    parser.add_argument("--align", "-a",  help='align display edges ['+", ".join([ALIGN_BOTTOM, ALIGN_TOP])+']', default = ALIGN_BOTTOM, type=str)
 
     args = parser.parse_args()
 
@@ -241,4 +242,4 @@ if(__name__ == "__main__"):
     if args.density is not None and args.density not in DENSITIES:
         parser.error("--density must be one of: "+", ".join(DENSITIES))
 
-    main(args.dry_run, args.setup, args.density, args.print_modes, not(args.disable_gnome_save), args.gnome_save_file)
+    main(args.dry_run, args.setup, args.density, args.print_modes, not(args.disable_gnome_save), args.gnome_save_file, args.align)
