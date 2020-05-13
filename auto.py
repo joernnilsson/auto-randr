@@ -143,6 +143,7 @@ def main(dry_run, setup_override, preferred_density,print_modes, gnome_save, gno
         if (selected_setup == BUILTIN_ONLY):
 
             screens_sorted.append(screen_builtin)
+            screen_builtin.set_enabled(True)
 
             for s in screens_external:
                 s.set_enabled(False)
