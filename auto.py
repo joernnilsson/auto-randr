@@ -27,6 +27,8 @@ DENSITY_4K = "4k"
 MODE_SELECT_RATE = 'rate'
 MODE_SELECT_DENSITY = 'density'
 MODE_SELECT_RESOLUTION = 'resolution'
+MODE_SELECT_ASPECT = 'aspect'
+
 
 # Align options
 ALIGN_TOP = 'top'
@@ -47,9 +49,10 @@ SETUPS = [
 ]
 
 DENSITY_4K_THRESHOLD = 150.0
+ASPECT_CLOSE_EPS = 0.05
 
 def is_builtin(screen):
-    if screen.name == 'eDP-1':
+    if screen.name in ['eDP-1', 'eDP-1-1']:
         return True
     return False
 
@@ -62,6 +65,9 @@ def filter_mode(mode, requirements = {}):
                 return False
         elif key == MODE_SELECT_RATE and mode.freq < val:
             return False
+        elif key == MODE_SELECT_ASPECT and math.fabs(mode.aspect - val) > ASPECT_CLOSE_EPS:
+            return False
+        
     return True
 
 def mode_sort_key(mode, order = []):
@@ -78,7 +84,6 @@ def mode_sort_key(mode, order = []):
 def select_mode_2(modes, requirements = {}, sort = []):
     candidates = list(filter(lambda x: filter_mode(x, requirements), modes))
     a = sorted(candidates, key=lambda x: mode_sort_key(x, sort), reverse=True)
-
     return a[0]
 
 def set_positions(screens, align):
@@ -93,7 +98,18 @@ def set_positions(screens, align):
 
 
 def main(dry_run, setup_override, preferred_density,print_modes, gnome_save, gnome_save_file, align):
-    cs = randr.connected_screens()
+
+    screens_all = randr.screens()
+
+    cs = []
+    screens_disconnected = []
+    for s in screens_all:
+        if s.is_connected():
+            cs.append(s)
+        else:
+            screens_disconnected.append(s)
+            
+    #cs = randr.connected_screens()
 
     # Print info
     for s in cs:
@@ -178,9 +194,11 @@ def main(dry_run, setup_override, preferred_density,print_modes, gnome_save, gno
                 s.set_enabled(True)
 
         # Set modes
-        mode_requirements = {MODE_SELECT_DENSITY: preferred_density}
+        
         mode_sort = [MODE_SELECT_RESOLUTION, MODE_SELECT_RATE]
         for s in screens_sorted:
+
+                mode_requirements = {MODE_SELECT_DENSITY: preferred_density, MODE_SELECT_ASPECT: s.physical_aspect}
                 mode = select_mode_2(s.modes(), mode_requirements, mode_sort)
                 s.set_mode(mode)
 
@@ -188,12 +206,25 @@ def main(dry_run, setup_override, preferred_density,print_modes, gnome_save, gno
         set_positions(screens_sorted, align)
 
 
-    randr.xrandr_apply(cs, dry_run)
+    # Disable disconnected screens
+    for s in screens_disconnected:
+        s.set_enabled(False)
+
+    randr.xrandr_apply(screens_all, dry_run)
 
     if gnome_save and not dry_run:
         print("Saving to: "+gnome_save_file)
         gnome_monitors.save(cs, gnome_save_file)
         
+
+    # print i3 config
+    #for s in screens_sorted:
+    #    print("{}x{}+{}+{}".format(
+    #        s.set.resolution[0],
+    #        s.set.resolution[1],
+    #        s.set.position[0],
+    #        s.set.position[1],
+    #        ))
 
 
 if(__name__ == "__main__"):
@@ -207,7 +238,7 @@ if(__name__ == "__main__"):
     parser.add_argument("--dry-run", "-d", help='dry run, only print xrandr command', action='store_true')
     parser.add_argument("--density", "-n", help='pereferred density, [hd, 4k]', default = DENSITY_HD, type=str)
     parser.add_argument("--print-modes", "-p", help="print available modes", action='store_true')
-    parser.add_argument("--disable-gnome-save", "-g", help="disable saving to gnome xml backend", action='store_true')
+    parser.add_argument("--enable-gnome-save", "-g", help="enable saving to gnome xml backend", action='store_true')
     parser.add_argument("--gnome-save-file", help='gnome xml backend file to use ['+default_backend_path+']', default = default_backend_path, type=str)
     parser.add_argument("--align", "-a",  help='align display edges ['+", ".join([ALIGN_BOTTOM, ALIGN_TOP])+']', default = ALIGN_BOTTOM, type=str)
 
@@ -219,4 +250,4 @@ if(__name__ == "__main__"):
     if args.density is not None and args.density not in DENSITIES:
         parser.error("--density must be one of: "+", ".join(DENSITIES))
 
-    main(args.dry_run, args.setup, args.density, args.print_modes, not(args.disable_gnome_save), args.gnome_save_file, args.align)
+    main(args.dry_run, args.setup, args.density, args.print_modes, args.enable_gnome_save, args.gnome_save_file, args.align)

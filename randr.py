@@ -29,17 +29,19 @@ class Mode(object):
         self.current = current
         self.preferred = preferred
         self.dpi = 100.0
+        self.aspect = self.width / self.height
 
     def resolution(self):
         return (self.width, self.height)
 
     def __str__(self):
-        return "{}\t{:.2f} hz\t{:.1f} dpi\t preferred: {}\tcurrent: {}".format(
+        return "{}\t{:.2f} hz\t{:.1f} dpi\t preferred: {}\tcurrent: {}\t aspect: {:.2f}".format(
             "{}x{}".format(self.width, self.height).ljust(10), 
             self.freq, 
             self.dpi, 
             self.current, 
-            self.preferred)
+            self.preferred,
+            self.aspect)
 
 
     def cmd_str(self, arg1):
@@ -63,7 +65,7 @@ class ScreenSettings(object):
         self.freq = None
 
 class Screen(object):
-    def __init__(self, name, primary, rot, modes, manufacturer_id, manufacturer, model, physical_width, physical_height, product_id, serial_no):
+    def __init__(self, name, primary, rot, modes, manufacturer_id, manufacturer, model, physical_width, physical_height, product_id, serial_no, connected):
         super(Screen, self).__init__()
 
         self.name = name
@@ -73,9 +75,11 @@ class Screen(object):
         self.model = model
         self.product_id = product_id
         self.serial_no = serial_no
+        self.connected = connected
 
         self.physical_width = physical_width
         self.physical_height = physical_height
+        self.physical_aspect = self.physical_width / self.physical_height
 
         # dirty hack
         self.rotation = None
@@ -92,7 +96,7 @@ class Screen(object):
         self.set.is_enabled = self.is_enabled()
 
     def is_connected(self):
-        return len(self.supported_modes) != 0
+        return len(self.supported_modes) != 0 and self.connected
 
     def is_enabled(self):
         for m in self.supported_modes:
@@ -234,7 +238,7 @@ class Screen(object):
         self.set.reset()
 
     def __str__(self):
-        return '{}: {} ({} {}) primary: {}, modes: {}, conn: {}, rot: {}, enabled: {}'.format( \
+        return '{}: {} ({} {}) primary: {}, modes: {}, conn: {}, rot: {}, enabled: {}, aspect: {:.2f}'.format( \
                     self.name, \
                     self.manufacturer, \
                     self.manufacturer_id, \
@@ -243,7 +247,8 @@ class Screen(object):
                     len(self.supported_modes), 
                     self.is_connected(), \
                     rot_to_str(self.rotation), \
-                    self.is_enabled())
+                    self.is_enabled(),
+                    self.physical_aspect)
 
     __repr__ = __str__
 
@@ -288,7 +293,7 @@ def xrandr_apply(screens, dryrun):
     if not dryrun:
         exec_cmd(cmd)
 
-def create_screen(sc_line, modes, edid_data):
+def create_screen(sc_line, modes, edid_data, connected):
 
     name = sc_line.split(' ')[0]
     model = ""
@@ -320,7 +325,7 @@ def create_screen(sc_line, modes, edid_data):
         if len(fr) > 2:
             rot = str_to_rot(sc_line.split(' ')[3])
 
-    return Screen(name, 'primary' in sc_line, rot, modes, manufacturer_id, manufacturer, model, physical_width, physical_height, product_id, serial_no)
+    return Screen(name, 'primary' in sc_line, rot, modes, manufacturer_id, manufacturer, model, physical_width, physical_height, product_id, serial_no, connected)
 
 def parse_xrandr(lines):
     import re
@@ -328,7 +333,7 @@ def parse_xrandr(lines):
     rx = re.compile('^\s+(\d+)x(\d+)\s+')
     #rxfreq = re.compile('\s((?:\d+\.)?\d+)([* ]?)([+ ]?)')
     rxfreq = re.compile('\s([0-9]*[.]?[0-9]+|[0-9]+)([x]?)([* ]?)([+ ]?)')
-    rxconn = re.compile(r'\bconnected\b')
+    rxconn = re.compile(r'\sconnected\s')
     rxdisconn = re.compile(r'\bdisconnected\b')
 
     sc_name_line = None
@@ -350,7 +355,8 @@ def parse_xrandr(lines):
         if re.search(rxconn, i) or re.search(rxdisconn, i):
             if sc_name_line:
 
-                newscreen = create_screen(sc_name_line, modes, edid_data)
+                sc_connected = True if re.search(rxconn, sc_name_line) else False
+                newscreen = create_screen(sc_name_line, modes, edid_data, sc_connected)
                 screens.append(newscreen)
                 modes = []
                 edid_data = []
@@ -378,7 +384,7 @@ def parse_xrandr(lines):
                 edid_data.append(parts[0])
 
     if sc_name_line:
-        screens.append(create_screen(sc_name_line, modes, edid_data))
+        screens.append(create_screen(sc_name_line, modes, edid_data, sc_connected))
 
     return screens
 
@@ -387,6 +393,12 @@ def connected_screens():
     """
     #return [s for s in parse_xrandr(exec_cmd('xrandr')) if s.is_connected()]
     return [s for s in parse_xrandr(exec_cmd(['xrandr', '--verbose'])) if s.is_connected()]
+
+def screens():
+    """Get connected screens
+    """
+    #return [s for s in parse_xrandr(exec_cmd('xrandr')) if s.is_connected()]
+    return [s for s in parse_xrandr(exec_cmd(['xrandr', '--verbose']))]
 
 def enabled_screens():
     return [s for s in connected_screens() if s.is_enabled()]
