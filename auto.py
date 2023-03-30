@@ -2,7 +2,6 @@ import randr
 import sys
 import os
 import math
-import gnome_monitors
 import string
 from functools import reduce
 
@@ -20,6 +19,7 @@ BUILTIN_ONLY = "builtin_only"
 EXTERNAL_ONLY = "external_only"
 
 # Density
+DENSITY_ANY = "any"
 DENSITY_HD = "hd"
 DENSITY_4K = "4k"
 
@@ -36,6 +36,7 @@ ALIGN_BOTTOM = 'bottom'
 
 
 DENSITIES = [
+    DENSITY_ANY,
     DENSITY_HD,
     DENSITY_4K
 ]
@@ -57,6 +58,7 @@ def is_builtin(screen):
     return False
 
 def filter_mode(mode, requirements = {}):
+    #print(requirements)
     for key, val in requirements.items():
         if key == MODE_SELECT_DENSITY:
             if val == DENSITY_HD and mode.dpi > DENSITY_4K_THRESHOLD:
@@ -66,6 +68,7 @@ def filter_mode(mode, requirements = {}):
         elif key == MODE_SELECT_RATE and mode.freq < val:
             return False
         elif key == MODE_SELECT_ASPECT and math.fabs(mode.aspect - val) > ASPECT_CLOSE_EPS:
+            #print("________", mode.aspect, val)
             return False
         
     return True
@@ -83,6 +86,7 @@ def mode_sort_key(mode, order = []):
 
 def select_mode_2(modes, requirements = {}, sort = []):
     candidates = list(filter(lambda x: filter_mode(x, requirements), modes))
+    #print(candidates)
     a = sorted(candidates, key=lambda x: mode_sort_key(x, sort), reverse=True)
     return a[0]
 
@@ -97,7 +101,7 @@ def set_positions(screens, align):
             used_width += s.set.resolution[0]
 
 
-def main(dry_run, setup_override, preferred_density,print_modes, gnome_save, gnome_save_file, align):
+def main(dry_run, setup_override, preferred_density,print_modes, gnome_save, gnome_save_file, align, min_rate):
 
     screens_all = randr.screens()
 
@@ -112,8 +116,9 @@ def main(dry_run, setup_override, preferred_density,print_modes, gnome_save, gno
     #cs = randr.connected_screens()
 
     # Print info
+    print("connected screens:")
     for s in cs:
-        print(s)
+        print("-", s)
         if print_modes:
             for m in s.modes():
                 print(m)
@@ -134,7 +139,7 @@ def main(dry_run, setup_override, preferred_density,print_modes, gnome_save, gno
     print("Using setup:", selected_setup)
     if (selected_setup == MIRROR):
 
-        mode_requirements = {MODE_SELECT_DENSITY: preferred_density}
+        mode_requirements = {MODE_SELECT_DENSITY: preferred_density, MODE_SELECT_RATE: min_rate}
         mode_sort = [MODE_SELECT_RESOLUTION, MODE_SELECT_RATE]
 
         builtin_mode = select_mode_2(screen_builtin.modes(), mode_requirements, mode_sort)
@@ -197,8 +202,10 @@ def main(dry_run, setup_override, preferred_density,print_modes, gnome_save, gno
         
         mode_sort = [MODE_SELECT_RESOLUTION, MODE_SELECT_RATE]
         for s in screens_sorted:
-
-                mode_requirements = {MODE_SELECT_DENSITY: preferred_density, MODE_SELECT_ASPECT: s.physical_aspect}
+                #print("----")
+                #print(s.modes())
+                #print(s.physical_aspect)
+                mode_requirements = {MODE_SELECT_DENSITY: preferred_density, MODE_SELECT_ASPECT: s.physical_aspect, MODE_SELECT_RATE: min_rate}
                 mode = select_mode_2(s.modes(), mode_requirements, mode_sort)
                 s.set_mode(mode)
 
@@ -214,6 +221,7 @@ def main(dry_run, setup_override, preferred_density,print_modes, gnome_save, gno
 
     if gnome_save and not dry_run:
         print("Saving to: "+gnome_save_file)
+        import gnome_monitors
         gnome_monitors.save(cs, gnome_save_file)
         
 
@@ -236,11 +244,12 @@ if(__name__ == "__main__"):
 
     parser.add_argument("--setup", "-s", help='override setup autoselection, must be one of:\n['+", ".join(SETUPS)+']', default = None, type=str)
     parser.add_argument("--dry-run", "-d", help='dry run, only print xrandr command', action='store_true')
-    parser.add_argument("--density", "-n", help='pereferred density, [hd, 4k]', default = DENSITY_HD, type=str)
+    parser.add_argument("--density", "-n", help='pereferred density, [any, hd, 4k]', default = DENSITY_ANY, type=str)
     parser.add_argument("--print-modes", "-p", help="print available modes", action='store_true')
     parser.add_argument("--enable-gnome-save", "-g", help="enable saving to gnome xml backend", action='store_true')
     parser.add_argument("--gnome-save-file", help='gnome xml backend file to use ['+default_backend_path+']', default = default_backend_path, type=str)
     parser.add_argument("--align", "-a",  help='align display edges ['+", ".join([ALIGN_BOTTOM, ALIGN_TOP])+']', default = ALIGN_BOTTOM, type=str)
+    parser.add_argument("--min-rate", "-r",  help='minimum refresh rate', default = 0, type=float)
 
     args = parser.parse_args()
 
@@ -250,4 +259,4 @@ if(__name__ == "__main__"):
     if args.density is not None and args.density not in DENSITIES:
         parser.error("--density must be one of: "+", ".join(DENSITIES))
 
-    main(args.dry_run, args.setup, args.density, args.print_modes, args.enable_gnome_save, args.gnome_save_file, args.align)
+    main(args.dry_run, args.setup, args.density, args.print_modes, args.enable_gnome_save, args.gnome_save_file, args.align, args.min_rate)

@@ -81,6 +81,8 @@ class Screen(object):
         self.physical_height = physical_height
         self.physical_aspect = self.physical_width / self.physical_height
 
+        self.scale = [1, 1]
+
         # dirty hack
         self.rotation = None
         for r in modes:
@@ -186,6 +188,8 @@ class Screen(object):
             cmd.append('--auto')
             cmd.extend(['--mode', '{0}x{1}'.format(self.set.resolution[0], self.set.resolution[1])])
             cmd.extend(['--pos', "x".join(str(x) for x in self.set.position)])
+
+            cmd.extend(['--scale', '{0}x{1}'.format(self.scale[0], self.scale[1])])
 
             if self.set.freq:
                 cmd.extend(["--rate", str(self.set.freq)])
@@ -351,11 +355,12 @@ def parse_xrandr(lines):
     parsing_mode = None
 
     for i in lines:
-        #print(i)
+        #print("\t**", i)
         if re.search(rxconn, i) or re.search(rxdisconn, i):
             if sc_name_line:
 
                 sc_connected = True if re.search(rxconn, sc_name_line) else False
+                #print("connected: ", sc_connected, "___", sc_name_line)
                 newscreen = create_screen(sc_name_line, modes, edid_data, sc_connected)
                 screens.append(newscreen)
                 modes = []
@@ -384,6 +389,8 @@ def parse_xrandr(lines):
                 edid_data.append(parts[0])
 
     if sc_name_line:
+        sc_connected = True if re.search(rxconn, sc_name_line) else False
+        #print("connected: ", sc_connected, "___++", sc_name_line)
         screens.append(create_screen(sc_name_line, modes, edid_data, sc_connected))
 
     return screens
@@ -404,6 +411,7 @@ def enabled_screens():
     return [s for s in connected_screens() if s.is_enabled()]
 
 if __name__ == "__main__":
-    print(parse_xrandr(exec_cmd('xrandr')))
+    #print(parse_xrandr(exec_cmd('xrandr')))
     print("--------------------------------------------------------------------------")
-    print(parse_xrandr(exec_cmd(['xrandr', '--verbose'])))
+    for x in parse_xrandr(exec_cmd(['xrandr', '--verbose'])):
+        print(x)
